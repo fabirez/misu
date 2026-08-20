@@ -195,13 +195,15 @@ export function end() {
 
 	const { current_project_sid: currentProjectSID, current_task_id: currentTaskID, timestamp_start: startTime } = state
 	let totalTime = Date.now() - startTime;
+	console.log("Type date:", typeof Date.now())
+	console.log("Start time:", typeof startTime)
+	console.log("Total time:", totalTime)
 
 	const trs = db.transaction(() => {
-		const { totalTime: totalTimeProjectDB } = db.prepare(`SELECT total_time FROM project WHERE sid = ?`).get(currentProjectSID);
+		const { total_time: totalTimeProjectDB } = db.prepare(`SELECT total_time FROM project WHERE sid = ?`).get(currentProjectSID);
 		db.prepare(`UPDATE project SET total_time = ? WHERE "sid" = ?`).run(totalTimeProjectDB + totalTime, currentProjectSID)
 
-		const { totalTime: totalTimeTaskDB } = db.prepare(`SELECT total_time FROM task WHERE "id" = ?`).get(currentTaskID);
-		// TODO: check how to add the timer, be aware of the types from the DB and from node
+		const { total_time: totalTimeTaskDB } = db.prepare(`SELECT total_time FROM task WHERE "id" = ?`).get(currentTaskID);
 		db.prepare(`UPDATE task SET total_time = ? WHERE "id" = ?`).run(totalTimeTaskDB + totalTime, currentTaskID);
 
 		db.prepare(`DELETE FROM state WHERE current_project_sid=?`).run(currentProjectSID);
