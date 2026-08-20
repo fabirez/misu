@@ -1,14 +1,20 @@
 #!/usr/bin/env node
+import path from "node:path";
+import url from "node:url";
+
+const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
+//====================
+// Database 
+//====================
+
 import Database from 'better-sqlite3';
 const options = {}
-const db = new Database('misu.db', options);
+const db = new Database(`${__dirname}/misu.db`, options);
 db.pragma('journal_mode = WAL');
 
-// Global varibales
-let isRunning = false;
-let existingTask = false;
-let existingProject = false;
-let currentProjectSID, currentTaskID, currentTaskName, start_time;
+//====================
+// Validation
+//====================
 
 /*
 	* @param {string} the verb (start || end)
@@ -26,7 +32,6 @@ export function isVerb(verb) {
 			return false;
 	}
 }
-
 
 /*
 	* @param {string} flag (--status)
@@ -66,7 +71,6 @@ export function isValidRecord(recordSID) {
 		!recordSID.match(/[^a-zA-Z0-9_]/);
 }
 
-
 /**
 	* @param {string} the task name
 	* @return {boolean}
@@ -90,10 +94,31 @@ export function isValidTask(taskName) {
 		!taskName.match(/[^a-zA-Z0-9_]/);
 }
 
-// TODO: Test this
-export function start(projectSID, taskName) {
 
-	// 1. Add in the database the projectSID with a reference to taskName
+//====================
+// Utility
+//====================
+
+function formatTimer(timestamp) {
+	const elapsed = Date.now() - timestamp;
+
+	const hours = Math.floor(elapsed / 3600000);
+	const minutes = Math.floor(elapsed / 60000) % 60;
+	const seconds = Math.floor(elapsed / 1000) % 60;
+
+	const result =
+		`${String(hours).padStart(2, '0')}:` +
+		`${String(minutes).padStart(2, '0')}:` +
+		`${String(seconds).padStart(2, '0')}`;
+
+	return result;
+}
+
+//====================
+// Verbs
+//====================
+
+export function start(projectSID, taskName) {
 
 	const c = db.prepare(`SELECT "sid" FROM "project" WHERE sid=?`)
 	const r = c.get(projectSID)
@@ -105,8 +130,10 @@ export function start(projectSID, taskName) {
 			db.prepare(`INSERT INTO project (sid, total_time, created_at) VALUES (?, ?, ?)`).run(projectSID, 0, Date.now());
 			db.prepare(`INSERT INTO task (task_name, total_time, created_at) VALUES (?, ?, ?)`).run(taskName, 0, Date.now());
 			const { id } = db.prepare(`SELECT "id" FROM "task" WHERE "task_name"=?`).get(taskName);
-			currentTaskID = id;
 			db.prepare(`INSERT INTO stream (project_sid,task_id) VALUES (?, ?)`).run(projectSID, id);
+
+			// Add the project to the current state.
+			db.prepare(`INSERT INTO state (current_project_sid, current_task_id, timestamp_start) VALUES (?, ?, ?)`).run(projectSID, id, Date.now());
 		})
 		try {
 			trs();
@@ -117,17 +144,25 @@ export function start(projectSID, taskName) {
 		}
 	} else {
 		// 1.1 Check if there is already a task with taskName
-		existingProject = true;
-		let checkTask = db.prepare(`SELECT task_name FROM task WHERE (SELECT task_id FROM stream WHERE "project_sid"=?)`).all(projectSID)
-		if (checkTask.length >= 1 && checkTask.filter((task) => task.task_name === taskName).length === 1) {
-			existingTask = true;
+		// Get all (many) the task with one relation with the current projectSID
+		let getAllTask = db.prepare(`SELECT task_name,id FROM task WHERE (SELECT task_id FROM stream WHERE "project_sid"=?)`).all(projectSID)
+		if (getAllTask.length >= 1 && getAllTask.filter((task) => task.task_name === taskName).length === 1) {
+			const { id } = getAllTask[0];
+			try {
+				// Add the project to the current state.
+				db.prepare(`INSERT INTO state (current_project_sid, current_task_id, timestamp_start) VALUES (?, ?, ?)`).run(projectSID, id, Date.now());
+				console.log("Database transaction successfull")
+			} catch (err) {
+				console.error("Database transaction error")
+				console.log("Error:", err)
+			}
 		} else {
 			const trs = db.transaction(() => {
 				db.prepare(`INSERT INTO task (task_name, total_time, created_at) VALUES (?, ?, ?)`).run(taskName, 0, Date.now());
 				db.prepare(`SELECT "sid" FROM "project" WHERE sid=?`)
 				const { id } = db.prepare(`SELECT "id" FROM "task" WHERE "task_name"=?`).get(taskName);
-				currentTaskID = id;
 				db.prepare(`INSERT INTO stream (project_sid,task_id) VALUES (?, ?)`).run(projectSID, id);
+				// Add the project to the current state.
 			})
 			try {
 				trs();
@@ -138,16 +173,56 @@ export function start(projectSID, taskName) {
 			}
 		}
 	}
-
-	// 2. Initialize the timer in the background
-	currentProjectSID = projectSID;
-	currentTaskName = taskName;
-	isRunning = true;
-	start_time = Date.now();
 }
 
 /** 
-	* return the current status of the program, based on the value 
+	* End the program
+	*   - Update the filed total_time in the db of the tables project, task.
+	*		- Reset the global variable 
+	*       - isRunning to false 
+	*				- currentSID, currentTaskID and startTime to undefined
+	*	@returns{err | undefined}
+	*			- return a log descriving the error, or undefined meaning everything is fine.
+	*/
+export function end() {
+
+	const state = db.prepare(`SELECT * FROM state`).get();
+	// put status of (statusFlag)
+	if (state === undefined) {
+		console.log("No project/task running")
+		return;
+	}
+
+	const { current_project_sid: currentProjectSID, current_task_id: currentTaskID, timestamp_start: startTime } = state
+	let totalTime = Date.now() - startTime;
+
+	const trs = db.transaction(() => {
+		const { totalTime: totalTimeProjectDB } = db.prepare(`SELECT total_time FROM project WHERE sid = ?`).get(currentProjectSID);
+		db.prepare(`UPDATE project SET total_time = ? WHERE "sid" = ?`).run(totalTimeProjectDB + totalTime, currentProjectSID)
+
+		const { totalTime: totalTimeTaskDB } = db.prepare(`SELECT total_time FROM task WHERE "id" = ?`).get(currentTaskID);
+		// TODO: check how to add the timer, be aware of the types from the DB and from node
+		db.prepare(`UPDATE task SET total_time = ? WHERE "id" = ?`).run(totalTimeTaskDB + totalTime, currentTaskID);
+
+		db.prepare(`DELETE FROM state WHERE current_project_sid=?`).run(currentProjectSID);
+	})
+
+	try {
+		trs();
+		console.log("Database transaction successfull")
+		return;
+	} catch (err) {
+		console.error("Database transaction error")
+		console.log("Error:", err)
+	}
+}
+
+//====================
+// Flags
+//====================
+
+/** 
+	* produce the current status of the program, based on the value 
 	* by the global variable isRunning.
 	*
 	*		if the variable is false, then it just 
@@ -158,74 +233,33 @@ export function start(projectSID, taskName) {
 	*		
 	*/
 export function statusFlag() {
-	if (isRunning) {
+	const state = db.prepare(`SELECT * FROM state`).get();
+	if (state) {
+		const { current_project_sid: currentProjectSID, current_task_id: currentTaskID, timestamp_start: startTime } = state;
+		let timer = formatTimer(startTime);
+		const { task_name: taskName } = db.prepare(`SELECT task_name FROM task WHERE id=?`).get(currentTaskID);
 		console.log(JSON.stringify({
-			isRunning,
+			isRunning: true,
 			projectSID: currentProjectSID,
-			taskName: currentTaskName,
-			timer: Date.now() - start_time
+			taskName: taskName,
+			timer
 		}))
 		return;
 	} else {
-		console.log(JSON.stringify({ isRunning: isRunning }))
+		console.log(JSON.stringify({ isRunning: false }))
 		return;
 	}
 }
 
-// TODO: test this.
-/** 
-	* End the program
-	*   - Update the filed total_time in the db of the tables project, task.
-	*		- Reset the global variable 
-	*       - isRunning to false 
-	*				- currentSID, currentTaskID and start_time to undefined
-	*	@returns{err | undefined}
-	*			- return a log descriving the error, or undefined meaning everything is fine.
-	*/
-export function end() {
-	// put status of (statusFlag)
-	if (currentProjectSID === undefined || currentTaskID === undefined || start_time === undefined || isRunning === false) {
-		console.log("No project/task running")
-		return;
-	}
-
-	let totalTime = Date.now() - start_time;
-	const trs = db.transaction(() => {
-		if (existingProject && existingTask) {
-			const { totalTime: totalTimeProjectDB } = db.prepare(`SELECT total_time FROM project WHERE sid = ?`).get(currentProjectSID);
-			db.prepare(`INSERT INTO project (total_time) VALUES (?) WHERE sid = ?`).run(totalTimeProjectDB + totalTime, currentProjectSID)
-			const { totalTime: totalTimeTaskDB } = db.prepare(`SELECT total_time FROM task WHERE id = ?`).get(currentTaskID);
-			db.prepare(`INSERT INTO task (total_time) VALUES (?) where id = ?`).run(totalTimeTaskDB, currentTaskID);
-		} else if (existingProject && !existingTask) {
-			const { totalTime: totalTimeProjectDB } = db.prepare(`SELECT total_time FROM project WHERE sid = ?`).get(currentProjectSID);
-			db.prepare(`INSERT INTO project (total_time) VALUES (?) WHERE sid = ?`).run(totalTimeProjectDB + totalTime, currentProjectSID)
-			db.prepare(`INSERT INTO task (total_time) VALUES (?) where id = ?`).run(totalTime, currentTaskID);
-		} else {
-			db.prepare(`INSERT INTO project (total_time) VALUES (?) WHERE sid = ?`).run(totalTime, currentProjectSID);
-			db.prepare(`INSERT INTO task (total_time) VALUES (?) where id = ?`).run(totalTime, currentTaskID);
-		}
-	})
-	try {
-		trs();
-		console.log("Database transaction successfull")
-		isRunning = false;
-		existingTask = false;
-		existingProject = false;
-		currentProjectSID = undefined;
-		currentTaskID = undefined;
-		start_time = undefined;
-		return;
-	} catch (err) {
-		console.error("Database transaction error")
-		console.log("Error:", err)
-	}
-}
+//====================
+// Initial Funcionts
+//====================
 
 /**
+	* Based on the given verb, call the right function
 	* @param {string} the verb 
 	* @param {string} the recordSID
 	* @param {string} the task name
-	* Based on the given verb, call the right function
 	*/
 export function mainFunction(verb, recordSID = null, taskName = null) {
 	//  if we got there, everything is validate!
@@ -244,7 +278,7 @@ export function mainFunction(verb, recordSID = null, taskName = null) {
 	*			- false if there is a problem with a message indicating possible solutions
 	*/
 
-export function validateInput(allArguments) {
+export function startProgram(allArguments) {
 	if (isVerb(allArguments[0])) {
 		const verb = allArguments[0];
 		if (verb === "start" && allArguments.length === 3 && isValidRecord(allArguments[1]) && isValidTask(allArguments[2])) {
@@ -264,11 +298,11 @@ export function validateInput(allArguments) {
 			return false;
 		}
 	} else {
-		console.log("Not tracking");
+		console.log("󰝤 Not tracking");
 		console.log("For a full list of commands use --help");
 		return false;
 	}
 }
 
 // Get the inputs and start the program
-validateInput(process.argv.slice(2));
+startProgram(process.argv.slice(2));
