@@ -147,7 +147,7 @@ export function start(projectSID, taskName) {
 		// Get all (many) the task with one relation with the current projectSID
 		let getAllTask = db.prepare(`SELECT task_name,id FROM task WHERE (SELECT task_id FROM stream WHERE "project_sid"=?)`).all(projectSID)
 		if (getAllTask.length >= 1 && getAllTask.filter((task) => task.task_name === taskName).length === 1) {
-			const { id } = getAllTask[0];
+			const { id } = getAllTask.filter((task) => task.task_name === taskName)[0];
 			try {
 				// Add the project to the current state.
 				db.prepare(`INSERT INTO state (current_project_sid, current_task_id, timestamp_start) VALUES (?, ?, ?)`).run(projectSID, id, Date.now());
@@ -163,6 +163,7 @@ export function start(projectSID, taskName) {
 				const { id } = db.prepare(`SELECT "id" FROM "task" WHERE "task_name"=?`).get(taskName);
 				db.prepare(`INSERT INTO stream (project_sid,task_id) VALUES (?, ?)`).run(projectSID, id);
 				// Add the project to the current state.
+				db.prepare(`INSERT INTO state (current_project_sid, current_task_id, timestamp_start) VALUES (?, ?, ?)`).run(projectSID, id, Date.now());
 			})
 			try {
 				trs();
