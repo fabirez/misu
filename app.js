@@ -8,6 +8,7 @@ const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 //====================
 
 import Database from 'better-sqlite3';
+import { time } from "node:console";
 const options = {}
 const db = new Database(`${__dirname}/misu.db`, options);
 db.pragma('journal_mode = WAL');
@@ -43,6 +44,8 @@ export function isFlag(verb) {
 	switch (verb) {
 		case "--status":
 			return true;
+		case "--stats":
+			return true;
 		default:
 			return false;
 	}
@@ -60,8 +63,6 @@ export function isFlag(verb) {
 	*     - Length >= 1 && <= 124
 	*/
 export function isValidRecord(recordSID) {
-	// new String('somestring') console.log(typeof somevar) // object 
-	// (that's why we got typeof and instanceof)
 	return (typeof recordSID == "string" || recordSID instanceof String)
 		&&
 		recordSID.length >= 1
@@ -83,8 +84,6 @@ export function isValidRecord(recordSID) {
 	*     - Length >= 1 && <= 124
 	*/
 export function isValidTask(taskName) {
-	// new String('somestring') console.log(typeof somevar) // object 
-	// (that's why we got typeof and instanceof)
 	return (typeof taskName == "string" || taskName instanceof String)
 		&&
 		taskName.length >= 1
@@ -99,7 +98,16 @@ export function isValidTask(taskName) {
 // Utility
 //====================
 
-function formatTimer(timestamp) {
+/**
+ * Format the given timestamp to a readable human format
+ * and return the time passed between the started timer
+ * @param {int} timestamp
+ * @returns {string} 
+ *	the time in the following format hh:mm:ss
+ */
+
+// TODO: test this
+export function formatTimer(timestamp) {
 	const elapsed = Date.now() - timestamp;
 
 	const hours = Math.floor(elapsed / 3600000);
@@ -112,6 +120,33 @@ function formatTimer(timestamp) {
 		`${String(seconds).padStart(2, '0')}`;
 
 	return result;
+}
+
+export function formatTime(timestamp) {
+	const hours = Math.floor(timestamp / 3600000);
+	const minutes = Math.floor(timestamp / 60000) % 60;
+	const seconds = Math.floor(timestamp / 1000) % 60;
+
+	// NOTE: without () javascript give precendece + over ?
+	return (hours ? `${String(hours).padStart(2, '0')}h` : "") +
+		(minutes ? `${String(minutes).padStart(2, '0')}m` : "") +
+		(seconds ? `${String(seconds).padStart(2, '0')}s` : "");
+}
+
+/**
+ * Format the given timestamp to a readable human format
+ * @param {int} timestamp
+ * @returns {string} 
+ *	the date in the following format dd:mm:yy
+ */
+
+// TODO: test this
+export function formatDate(timestamp) {
+	const date = new Date(timestamp);
+	const yy = date.getFullYear();
+	const mm = String(date.getMonth() + 1).padStart(2, '0');
+	const dd = String(date.getDate()).padStart(2, '0');
+	return `${dd}-${mm}-${yy}`;
 }
 
 //====================
@@ -196,9 +231,6 @@ export function end() {
 
 	const { current_project_sid: currentProjectSID, current_task_id: currentTaskID, timestamp_start: startTime } = state
 	let totalTime = Date.now() - startTime;
-	console.log("Type date:", typeof Date.now())
-	console.log("Start time:", typeof startTime)
-	console.log("Total time:", totalTime)
 
 	const trs = db.transaction(() => {
 		const { total_time: totalTimeProjectDB } = db.prepare(`SELECT total_time FROM project WHERE sid = ?`).get(currentProjectSID);
@@ -229,7 +261,7 @@ export function end() {
 	* by the global variable isRunning.
 	*
 	*		if the variable is false, then it just 
-	*			@returns {obj} ....
+	*			@returns {obj}  
 	*
 	*		if the variable is true, then it just 
 	*			@returns {obj}
@@ -254,6 +286,36 @@ export function statusFlag() {
 	}
 }
 
+
+/** 
+	* produce the statas of the projects and tasks by the user.
+	*		
+	*/
+export function statsFlag() {
+	const allProjects = db.prepare(`SELECT * FROM project`).all();
+	if (Array.isArray(allProjects) && allProjects.length > 0) {
+		for (const project of allProjects) {
+			const { sid, total_time: totalTimeProject, created_at: createdAtProject } = project;
+			console.log(sid)
+			console.log(" ", formatTime(totalTimeProject), formatDate(createdAtProject))
+			const tasks = db.prepare(`SELECT * from task WHERE id IN (select task_id FROM stream WHERE project_sid = ?)`).all(sid);
+			for (const task of tasks) {
+				const { id, task_name: taskName, total_time: totalTimeTask, created_at: createdAtTask } = task;
+				console.log(" 󰨓", taskName)
+				console.log("   ", formatTime(totalTimeTask), formatDate(createdAtTask))
+			}
+		}
+	} else {
+		console.log("There are still no project tracker.")
+		console.log("")
+		console.log("For tracking a new project:")
+		console.log("󰨓 misu start <projectSID> <taskSID>")
+		console.log("")
+		console.log("For listing all the commands available:")
+		console.log("󰨓 misu --help")
+	}
+}
+
 //====================
 // Initial Funcionts
 //====================
@@ -265,10 +327,11 @@ export function statusFlag() {
 	* @param {string} the task name
 	*/
 export function mainFunction(verb, recordSID = null, taskName = null) {
-	//  if we got there, everything is validate!
+	// TODO: change param names
 	if (verb === "start") start(recordSID, taskName)
 	if (verb === "end") end()
 	if (verb === "--status") statusFlag()
+	if (verb === "--stats") statsFlag()
 }
 
 /** 
@@ -296,7 +359,10 @@ export function startProgram(allArguments) {
 		const flag = allArguments[0];
 		if (flag === "--status" && allArguments.length === 1) {
 			return mainFunction(flag)
+		} else if (flag === "--stats" && allArguments.length === 1) {
+			return mainFunction(flag)
 		} else {
+			// TODO:
 			console.log("List of all flags");
 			return false;
 		}
