@@ -297,8 +297,8 @@ export function statsFlag() {
 		for (const project of allProjects) {
 			const { sid, total_time: totalTimeProject, created_at: createdAtProject } = project;
 			console.log(sid)
-			console.log(" ", formatTime(totalTimeProject), formatDate(createdAtProject))
 			const tasks = db.prepare(`SELECT * from task WHERE id IN (select task_id FROM stream WHERE project_sid = ?)`).all(sid);
+			console.log(" ", tasks?.length + "   ", formatTime(totalTimeProject), formatDate(createdAtProject))
 			for (const task of tasks) {
 				const { id, task_name: taskName, total_time: totalTimeTask, created_at: createdAtTask } = task;
 				console.log(" 󰨓", taskName)
