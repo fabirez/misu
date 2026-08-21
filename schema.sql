@@ -25,7 +25,7 @@ CREATE TABLE stream (
 
 create TABLE task (
 	"id" INTEGER,
-	"task_name" TEXT NOT NULL UNIQUE,
+	"task_name" TEXT NOT NULL,
 	"total_time" INTEGER DEFAULT 0,
 	"created_at" INTEGER NOT NULL,
 
