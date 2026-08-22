@@ -1,14 +1,23 @@
 #!/usr/bin/env node
 import path from "node:path";
 import url from "node:url";
+import { parseArgs } from 'node:util';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
+
+const { values } = parseArgs({
+	options: {
+		status: { type: 'boolean' },
+		stats: { type: 'boolean', short: 's' }
+	},
+	allowPositionals: true,
+});
+
 //====================
 // Database 
 //====================
 
 import Database from 'better-sqlite3';
-import { time } from "node:console";
 const options = {}
 const db = new Database(`${__dirname}/misu.db`, options);
 db.pragma('journal_mode = WAL');
@@ -330,8 +339,8 @@ export function mainFunction(verb, recordSID = null, taskName = null) {
 	// TODO: change param names
 	if (verb === "start") start(recordSID, taskName)
 	if (verb === "end") end()
-	if (verb === "--status") statusFlag()
-	if (verb === "--stats") statsFlag()
+	if (values.status) statusFlag()
+	if (values.stats) statsFlag()
 }
 
 /** 
