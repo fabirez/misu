@@ -1,4 +1,4 @@
-import { FLAGS } from "../data/constants.js"
+import { FLAGS } from "./constants.js"
 
 /**
  *  Check if the given arg is a long flag option

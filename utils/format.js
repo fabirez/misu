@@ -22,23 +22,24 @@ export function formatTimer(timestamp) {
 
 /**
  * Format the given timestamp to a readable human format
- * adding [h]our, [m]inutes, and [s]econds only when it's not zero.
+ * adding [h]our, [m]inutes, and [s]econds only if they are present 
+ * in the timer, seconds are the only part that exist also if it's zero.
  * @param {int} timestamp
  * @returns {string} 
  *	the time in the following format 01h:20m:30s
  *																	 20m:30s
  *																	 30s
  */
-// TODO: Test
 export function formatTime(timestamp) {
 	const hours = Math.floor(timestamp / 3600000);
 	const minutes = Math.floor(timestamp / 60000) % 60;
 	const seconds = Math.floor(timestamp / 1000) % 60;
 
-	// NOTE: without () javascript give precendece + over ?
-	return (hours ? `${String(hours).padStart(2, '0')}h` : "") +
-		(minutes ? `${String(minutes).padStart(2, '0')}m` : "") +
-		(seconds ? `${String(seconds).padStart(2, '0')}s` : "");
+	return hours   ? `${String(hours).padStart(2, '0')}h${String(minutes).padStart(2, '0')}m${String(seconds).padStart(2, '0')}s`
+				 :
+				 minutes ? `${String(minutes).padStart(2, '0')}m${String(seconds).padStart(2, '0')}s`
+				 : 
+			   `${String(seconds).padStart(2, '0')}s`;
 }
 
 /**
@@ -47,7 +48,6 @@ export function formatTime(timestamp) {
  * @returns {string} 
  *	the date in the following format dd:mm:yy
  */
-// TODO: Test
 export function formatDate(timestamp) {
 	const date = new Date(timestamp);
 	const yy = date.getFullYear();
