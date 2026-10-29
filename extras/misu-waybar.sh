@@ -1,7 +1,7 @@
 #!/bin/sh
 
 MISU_BIN=misu
-statusOut=$($MISU_BIN --status)
+statusOut=$($MISU_BIN --status json)
 
 # Example waybar configuration
 
@@ -18,7 +18,7 @@ for key in $(echo "$statusOut" | jq -r 'keys[]'); do
   export "$key"="$value"
 done
 
-if [[ "$isRunning" == true ]]; then
+if [ "$isRunning" == true ]; then
   jq -nc \
       --arg project_sid "$projectSID" \
       --arg task_sid "$taskName" \
