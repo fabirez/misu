@@ -1,4 +1,4 @@
-CREATE TABLE state (
+CREATE TABLE IF NOT EXISTS state (
 	"current_project_sid" TEXT NOT NULL,
 	"current_task_id" TEXT NOT NULL,
 	"timestamp_start" INTEGER NOT NULL,
@@ -7,7 +7,7 @@ CREATE TABLE state (
 	FOREIGN KEY("current_task_id") REFERENCES "task"("id")
 );
 
-CREATE TABLE project (
+CREATE TABLE IF NOT EXISTS project (
 	"sid" TEXT,
 	"total_time" INTEGER DEFAULT 0,
   "created_at" INTEGER NOT NULL,
@@ -15,7 +15,7 @@ CREATE TABLE project (
 	PRIMARY KEY("sid")
 );
 
-CREATE TABLE stream (
+CREATE TABLE IF NOT EXISTS stream (
 	"project_sid" TEXT,
 	"task_id" INTEGER,
 
@@ -23,7 +23,7 @@ CREATE TABLE stream (
 	FOREIGN KEY("task_id") REFERENCES "task"("id")
 );
 
-create TABLE task (
+CREATE TABLE IF NOT EXISTS task (
 	"id" INTEGER,
 	"task_name" TEXT NOT NULL,
 	"total_time" INTEGER DEFAULT 0,
