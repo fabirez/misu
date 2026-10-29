@@ -1,34 +1,37 @@
-import { DB } from "../data/constants"
+import { DB, SCHEMA } from "./constants.js"
+
+//====================
+// Init 
+//====================
+
+export function initDB(){
+	return DB.exec(SCHEMA);
+}
 
 //====================
 // Add
 //====================
 
 export function addProjectInDB(projectSID, totalTime, createdAt) {
-	DB.prepare(`INSERT INTO project (sid, total_time, created_at) VALUES (?, ?, ?)`).run(projectSID, totalTime, createdAt);
+	return DB.prepare(`INSERT INTO project (sid, total_time, created_at) VALUES (?, ?, ?)`).run(projectSID, totalTime, createdAt);
 }
 
 export function addTaskInDB(taskName, totalTime, createdAt) {
-	DB.prepare(`INSERT INTO task (task_name, total_time, created_at) VALUES (?, ?, ?)`).run(taskName, totalTime, createdAt);
+	return DB.prepare(`INSERT INTO task (task_name, total_time, created_at) VALUES (?, ?, ?)`).run(taskName, totalTime, createdAt);
 }
 
 export function addStreamInDB(projectSID, taskID) {
-	DB.prepare(`INSERT INTO stream (project_sid,task_id) VALUES (?, ?)`).run(projectSID, taskID);
+	return DB.prepare(`INSERT INTO stream (project_sid,task_id) VALUES (?, ?)`).run(projectSID, taskID);
 }
 
 export function addStateInDB(projectSID, taskID, timestampStart) {
-	DB.prepare(`INSERT INTO state (current_project_sid, current_task_id, timestamp_start) VALUES (?, ?, ?)`).run(projectSID, taskID, timestampStart);
+	return DB.prepare(`INSERT INTO state (current_project_sid, current_task_id, timestamp_start) VALUES (?, ?, ?)`).run(projectSID, taskID, timestampStart);
 }
 
 
 //====================
 // Get
 //====================
-
-export function getIdFromTaskName(taskName) {
-	const { id } = DB.prepare(`SELECT "../data/constants" FROM "task" WHERE "task_name"=?`).get(taskName);
-	return id;
-}
 
 export function getTaskNameFromID(id) {
 	const { task_name } = DB.prepare(`SELECT task_name FROM task WHERE id=?`).get(id);
@@ -40,7 +43,7 @@ export function getProjectSIDFromSID(projectSID) {
 }
 
 export function getAllTaskFromProjectSID(projectSID) {
-	return DB.prepare(`SELECT * FROM task WHERE (SELECT task_id FROM stream WHERE "project_sid"=?)`).all(projectSID)
+	return DB.prepare(`SELECT * FROM task WHERE id IN (SELECT task_id FROM stream WHERE "project_sid"=?)`).all(projectSID)
 }
 export function getAllTaskFromProjectSIDInStream(projectSID) {
 	return DB.prepare(`SELECT * from task WHERE id IN (select task_id FROM stream WHERE project_sid = ?)`).all(projectSID);
@@ -70,11 +73,11 @@ export function getTotaltTimeTaskFromID(taskID) {
 //====================
 
 export function updateProjectTotalTime(totalTime, projectSID) {
-	DB.prepare(`UPDATE project SET total_time = ? WHERE "sid" = ?`).run(totalTime, projectSID)
+	return DB.prepare(`UPDATE project SET total_time = ? WHERE "sid" = ?`).run(totalTime, projectSID)
 }
 
 export function updateTaskTotalTime(totalTime, taskID) {
-	DB.prepare(`UPDATE task SET total_time = ? WHERE "id" = ?`).run(totalTime, taskID);
+	return DB.prepare(`UPDATE task SET total_time = ? WHERE "id" = ?`).run(totalTime, taskID);
 }
 
 //====================
@@ -82,6 +85,6 @@ export function updateTaskTotalTime(totalTime, taskID) {
 //====================
 
 export function deleteStateFromSID(ProjectSID) {
-	DB.prepare(`DELETE FROM state WHERE current_project_sid=?`).run(ProjectSID);
+	return DB.prepare(`DELETE FROM state WHERE current_project_sid=?`).run(ProjectSID);
 }
 
