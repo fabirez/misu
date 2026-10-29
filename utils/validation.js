@@ -1,4 +1,5 @@
 import process from 'node:process';
+import { EXIT_FAILURE } from './constants.js';
 
 /*
 	* Check if the given verb exist.
@@ -81,7 +82,7 @@ export function isValidTask(taskName) {
 
 
 /**
-  * The validation needed for the verb start,
+	* The validation needed for the verb start,
 	* check if the given projectSID and task are
 	* valid.
 	* - Valid means:
@@ -90,33 +91,33 @@ export function isValidTask(taskName) {
 	*     3. Length >= 1 && <= 124
 	* @param {string} the project SID 
 	* @param {string} the task name
-	* @return {true | int}
-	*   true if the given task name and projectSID are valid
-	*   or a process.exit with the right error code.
+	* @return {boolean}
+	*   true if the given task name and projectSID are valid; 
+	*   false otherwise
 	*/
 
 export function startValidation(projectSID, taskName) {
 
 	if (!projectSID) {
-		console.log("󰔶  A project SID is required")
-		console.log("")
-		console.log("󰜋  misu start <project> <task>")
-		return process.exit(BAD_INPUT);
+		console.error("󰔶  A project SID is required")
+		console.error("")
+		console.error("󰜋  misu start <project> <task>")
+		return false;
 	}
 
 	if (!taskName) {
-		console.log("󰔶  A name for the task is required");
-		console.log("")
-		console.log(`󰜋  misu start ${projectSID} <task>`)
-		return process.exit(BAD_INPUT);
+		console.error("󰔶  A name for the task is required");
+		console.error("")
+		console.error(`󰜋  misu start ${projectSID} <task>`)
+		return false;
 	}
 
 	const validation = isValidProjectSID(projectSID) && isValidTask(taskName);
 	if (!validation) {
-		console.log("󰔶  Only alphanumeric charater are admitted (a-zA-Z0-9_)");
-		console.log("")
-		console.log(`󰜋  misu start <project> <task>`)
-		return process.exit(BAD_INPUT);
+		console.error("󰔶  Only alphanumeric charater are admitted (a-zA-Z0-9_)");
+		console.error("")
+		console.error(`󰜋  misu start <project> <task>`)
+		return false;
 	}
 
 	return validation;
